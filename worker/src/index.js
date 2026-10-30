@@ -4,8 +4,8 @@
 // protected by a reply token whose SHA-256 hash is the only thing kept (2 h TTL).
 //
 // Routes
-//   POST /ask                 {session, replyToken, course, hole, lat, lon, accuracy, question?, webhookUrl, authHeader}
-//                             -> forwards {session, course, hole, lat, lon, accuracy, question, replyUrl, replyToken}
+//   POST /ask                 {session, replyToken, course, hole, lat, lon, accuracy, question?, test?, carries?, rollPct?, webhookUrl, authHeader}
+//                             -> forwards {session, course, hole, lat, lon, accuracy, question, test, carries?, rollPct?, replyUrl, replyToken}
 //                                to webhookUrl with Authorization: authHeader, returns 202
 //   POST /reply/<session>     header X-Reply-Token; body text/plain (or JSON {"reply": "..."}) -> stores reply
 //   GET  /reply/<session>     header X-Reply-Token; ?since=<ms> -> 200 {reply, at} or 204
@@ -92,6 +92,22 @@ async function checkToken(env, session, token) {
   return !!stored && timingSafeEq(stored, await sha256(token));
 }
 
+// Player's own club carries (metres), e.g. {"D":230,"7i":157}. Optional. Unknown clubs or odd values are
+// dropped; a non-object or more than 16 entries is refused. Returns null (absent), false (refuse) or a clean object.
+const CLUB_KEYS = new Set(['D', '2W', '3W', '4W', '5W', '7W', '9W', 'FW', '2H', '3H', '4H', '5H', '6H', '7H', 'H', '2i', '3i', '4i', '5i', '6i', '7i', '8i', '9i', 'PW', 'GW', 'AW', 'SW', 'LW']);
+function cleanCarries(c) {
+  if (c === undefined || c === null) return null;
+  if (typeof c !== 'object' || Array.isArray(c)) return false;
+  const keys = Object.keys(c);
+  if (keys.length > 16) return false;
+  const out = {};
+  for (const k of keys) {
+    const v = Number(c[k]);
+    if (CLUB_KEYS.has(k) && Number.isInteger(v) && v >= 20 && v <= 350) out[k] = v;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
 async function handleAsk(req, env, ctx) {
   const len = parseInt(req.headers.get('Content-Length') || '0', 10);
   if (len > MAX_ASK_BYTES) return json(req, env, 413, { error: 'too large' });
@@ -113,6 +129,9 @@ async function handleAsk(req, env, ctx) {
   if (!Number.isInteger(hole) || hole < 1 || hole > 18) return json(req, env, 400, { error: 'bad hole' });
   if (!(lat >= -90 && lat <= 90) || !(lon >= -180 && lon <= 180)) return json(req, env, 400, { error: 'bad lat/lon' });
   const question = typeof b.question === 'string' ? b.question.slice(0, 300) : '';
+  const carries = cleanCarries(b.carries);
+  if (carries === false) return json(req, env, 400, { error: 'bad carries' });
+  const rollPct = Number(b.rollPct);
   const auth = cleanAuth(b.authHeader);
   if (!auth) return json(req, env, 400, { error: 'bad authHeader' });
   const urlErr = checkWebhookUrl(String(b.webhookUrl || ''), env);
@@ -133,6 +152,9 @@ async function handleAsk(req, env, ctx) {
     lat: Math.round(lat * 1e6) / 1e6, lon: Math.round(lon * 1e6) / 1e6,
     accuracy: Number.isFinite(acc) ? Math.round(acc) : null,
     question,
+    test: b.test === true,
+    ...(carries ? { carries } : {}),
+    ...(carries && Number.isFinite(rollPct) && rollPct >= 0 && rollPct <= 30 ? { rollPct: Math.round(rollPct * 10) / 10 } : {}),
     replyUrl: `${origin}/reply/${session}`,
     replyToken: token,
   };

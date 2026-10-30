@@ -33,15 +33,18 @@ r = await fetch(R + '/', { headers: { Origin: 'https://evil.example' } });
 ok(!r.headers.get('access-control-allow-origin'), 'no ACAO for other origin');
 
 const session = rid(18), token = rid(24);
-const base = { session, replyToken: token, course: 'la-finca', hole: 1, lat: 38.0577546, lon: -0.7944177, accuracy: 6.4, question: 'Welke club?', webhookUrl: hook, authHeader: 'Authorization: Bearer SECRET-KEY-123' };
+const base = { session, replyToken: token, course: 'la-finca', hole: 1, lat: 38.0577546, lon: -0.7944177, accuracy: 6.4, question: 'Welke club?', carries: { D: 230, '7i': 157, XX: 120, PW: 9999 }, rollPct: 5, webhookUrl: hook, authHeader: 'Authorization: Bearer SECRET-KEY-123' };
 
 // validation
 for (const [k, v, m] of [['webhookUrl', 'http://example.com/x', 'http refused'], ['webhookUrl', 'https://10.0.0.1/x', 'IP refused'], ['webhookUrl', 'https://localhost/x', 'localhost refused'],
-  ['course', 'augusta', 'bad course'], ['hole', 19, 'bad hole'], ['lat', 'abc', 'bad lat'], ['session', 'short', 'bad session'], ['authHeader', 'a\r\nX: y', 'header injection']]) {
+  ['course', 'augusta', 'bad course'], ['hole', 19, 'bad hole'], ['lat', 'abc', 'bad lat'], ['session', 'short', 'bad session'], ['authHeader', 'a\r\nX: y', 'header injection'], ['carries', 'D230', 'carries string'], ['carries', [230], 'carries array'],
+  ['carries', Object.fromEntries(Array.from({ length: 20 }, (_, i) => ['k' + i, 100])), 'carries too many']]) {
   r = await post('/ask', Object.assign({}, base, { [k]: v })); ok(r.status === 400, m + ' -> ' + r.status);
 }
 r = await post('/ask', 'x'.repeat(7000)); ok(r.status === 413, 'size limit');
 
+// the validation burst above uses up the 12/min per-IP budget: wait for the next window
+await new Promise(s => setTimeout(s, 61000));
 // happy path
 const t0 = Date.now();
 r = await post('/ask', base);
@@ -50,6 +53,7 @@ await new Promise(s => setTimeout(s, 300));
 ok(got && got.auth === 'Bearer SECRET-KEY-123', 'auth header forwarded (prefix stripped)');
 ok(got && !('webhookUrl' in got.body) && !('authHeader' in got.body), 'url/key not forwarded in body');
 ok(got && got.body.replyUrl === R + '/reply/' + session && got.body.replyToken === token && got.body.hole === 1 && got.body.question === 'Welke club?', 'forwarded fields');
+ok(got && JSON.stringify(got.body.carries) === JSON.stringify({ D: 230, '7i': 157 }) && got.body.rollPct === 5 && got.body.test === false, 'carries cleaned + forwarded: ' + JSON.stringify(got && got.body.carries));
 
 // poll like the page
 let reply = null;
