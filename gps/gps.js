@@ -83,6 +83,12 @@
     return { club: best.name, carry: best.carry, mode: 'green',
       note: diff === 0 ? 'Precies je carry' : (diff > 0 ? best.carry + ' m carry, ' + diff + ' m langer dan midden' : best.carry + ' m carry, ' + (-diff) + ' m korter dan midden') };
   }
-  var api = { dist: dist, centroid: centroid, lineDist: lineDist, detectHole: detectHole, compute: compute, adviseClub: adviseClub };
+  // pixel position on the static georeferenced hole image (see tools/render_gps_imgs.py)
+  function imgPx(img, p) {
+    var x = (p[1] - img.c[1]) * img.kx, y = (p[0] - img.c[0]) * img.ky, c = Math.cos(img.th), s = Math.sin(img.th);
+    var rx = x * c - y * s, ry = x * s + y * c;
+    return [img.w / 2 + (img.ox || 0) + rx * img.sc, img.h / 2 + (img.oy || 0) - ry * img.sc];
+  }
+  var api = { imgPx: imgPx, dist: dist, centroid: centroid, lineDist: lineDist, detectHole: detectHole, compute: compute, adviseClub: adviseClub };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.GolfGPS = api;
 })(this);

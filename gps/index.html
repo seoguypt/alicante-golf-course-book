@@ -49,7 +49,23 @@
   .hide { display:none; }
   #toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:#000; color:#fff; padding:12px 18px; border-radius:10px; font-size:20px; font-weight:700; opacity:0; transition:opacity .2s; pointer-events:none; }
   #toast.show { opacity:1; }
+  .mapcard { border:3px solid var(--fg); border-radius:12px; margin:8px 0; overflow:hidden; background:#000; position:relative; }
+  .maptabs { display:flex; background:#fff; border-bottom:3px solid var(--fg); }
+  .maptabs button { flex:1; min-height:48px; font-size:18px; font-weight:800; border:0; border-right:2px solid var(--fg); background:#fff; color:#000; }
+  .maptabs button:last-child { border-right:0; }
+  .maptabs button.on { background:var(--g); color:#fff; }
+  .mapwrap { height:38vh; min-height:220px; position:relative; }
+  #lmap, #smap { position:absolute; inset:0; }
+  #smap svg { width:100%; height:100%; display:block; }
+  .mapmsg { position:absolute; left:6px; top:6px; right:56px; z-index:500; background:rgba(255,255,255,.92); color:#000; font-size:15px; font-weight:700; padding:4px 8px; border-radius:6px; }
+  .mapmsg:empty { display:none; }
+  #enlarge { position:absolute; right:6px; top:6px; z-index:600; width:46px; height:46px; font-size:26px; font-weight:900; border:2px solid #000; border-radius:8px; background:#fff; color:#000; }
+  body.full .mapcard { position:fixed; inset:0; margin:0; border-radius:0; z-index:1000; border:0; }
+  body.full .mapwrap { height:calc(100vh - 51px); }
+  .dist-label { background:#fff; color:#000; font-weight:900; font-size:18px; border:2px solid #000; border-radius:6px; padding:1px 6px; white-space:nowrap; }
+  .leaflet-container { font: inherit; }
 </style>
+<link rel="stylesheet" href="leaflet/leaflet.css">
 </head>
 <body>
 <header>
@@ -76,6 +92,18 @@
 </div>
 <div id="unmapped" class="card hide"><div class="club">Deze hole staat niet op de kaart, dus geen afstanden. Kies een andere hole met − / +.</div></div>
 
+<div class="mapcard" id="mapCard">
+  <div class="maptabs">
+    <button id="tSat" class="on">Satelliet</button><button id="tOsm">Kaart</button><button id="tImg">Foto (offline)</button>
+  </div>
+  <div class="mapwrap">
+    <div id="lmap"></div>
+    <div id="smap" class="hide"></div>
+    <div class="mapmsg" id="mapMsg"></div>
+    <button id="enlarge" aria-label="Kaart vergroten">⤢</button>
+  </div>
+</div>
+
 <div class="card" id="clubCard">
   <h2>Club</h2>
   <div class="club" id="clubAdv">–</div>
@@ -88,6 +116,7 @@
 </div>
 
 <button class="big primary" id="copy">Kopieer voor caddie</button>
+<button class="big" id="saveOffline">Holefoto's van deze baan offline opslaan</button>
 <button class="big" id="wake">Scherm aan houden: uit</button>
 
 <details id="clubsBox">
@@ -99,10 +128,11 @@
 
 <footer>
   Afstanden komen uit de kaart (OpenStreetMap-holelijnen en greens), niet van de vlag van vandaag; nauwkeurigheid een paar meter plus de GPS-afwijking van je telefoon. Midden = midden van de green. Je locatie blijft op je telefoon; deze pagina stuurt niets door.<br>
-  Kaartgegevens © OpenStreetMap contributors, ODbL.
+  Kaartgegevens © OpenStreetMap contributors, ODbL. Luchtfoto: PNOA cedido por © Instituto Geográfico Nacional (scne.es), CC BY 4.0. Kaart: Leaflet.
 </footer>
 <div id="toast"></div>
 
+<script src="leaflet/leaflet.js"></script>
 <script src="gps.js"></script>
 <script>
 (function () {
@@ -170,6 +200,7 @@
       e.innerHTML = z.label + ': bereik <span>' + z.reach + '</span> · carry <span>' + z.carry + '</span> m';
       hz.appendChild(e);
     });
+    drawMap();
     var a = r ? G.adviseClub(clubList(), r) : null;
     $('clubAdv').innerHTML = a ? ('<b>' + a.club + '</b> ' + (a.mode === 'layup' ? '(lay-up)' : '') + '<div class="note">' + a.note + '</div>')
       : (r ? 'Vul je clubafstanden in (onderaan).' : '–');
@@ -201,6 +232,103 @@
     if (document.visibilityState === 'visible' && st.wantWake && !st.wake && 'wakeLock' in navigator)
       navigator.wakeLock.request('screen').then(function (w) { st.wake = w; $('wake').textContent = 'Scherm aan houden: aan'; }).catch(function () {});
   });
+  // ---------- map panel ----------
+  var PNOA = 'https://www.ign.es/wmts/pnoa-ma?layer=OI.OrthoimageCoverage&style=default&tilematrixset=GoogleMapsCompatible&Service=WMTS&Request=GetTile&Version=1.0.0&Format=image/jpeg&TileMatrix={z}&TileCol={x}&TileRow={y}';
+  var ATT_PNOA = 'PNOA cedido por © <a href="https://www.scne.es">Instituto Geográfico Nacional</a>, CC BY 4.0 · © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, ODbL';
+  var ATT_OSM = '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, ODbL';
+  var mv = { mode: localStorage.getItem('gps.map') || 'sat', map: null, base: {}, feat: null, me: null, fitKey: null, tileErr: 0 };
+  function setMode(m) {
+    mv.mode = m; localStorage.setItem('gps.map', m);
+    $('tSat').className = m === 'sat' ? 'on' : ''; $('tOsm').className = m === 'osm' ? 'on' : ''; $('tImg').className = m === 'img' ? 'on' : '';
+    $('lmap').classList.toggle('hide', m === 'img'); $('smap').classList.toggle('hide', m !== 'img');
+    if (m !== 'img') {
+      ensureMap();
+      ['sat', 'osm'].forEach(function (k) { if (k === m) { if (!mv.map.hasLayer(mv.base[k])) mv.base[k].addTo(mv.map); } else if (mv.map.hasLayer(mv.base[k])) mv.map.removeLayer(mv.base[k]); });
+      setTimeout(function () { mv.map.invalidateSize(); }, 50);
+    }
+    mv.fitKey = null; drawMap();
+  }
+  function ensureMap() {
+    if (mv.map || !window.L) return;
+    mv.map = L.map('lmap', { zoomControl: true, attributionControl: true, maxZoom: 20 });
+    mv.map.attributionControl.setPrefix(false);
+    mv.base.sat = L.tileLayer(PNOA, { maxZoom: 20, maxNativeZoom: 19, attribution: ATT_PNOA });
+    mv.base.osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 20, maxNativeZoom: 19, attribution: ATT_OSM });
+    [mv.base.sat, mv.base.osm].forEach(function (t) { t.on('tileerror', function () { mv.tileErr++; if (mv.tileErr > 6 && !navigator.onLine) $('mapMsg').textContent = 'Geen internet: kies "Foto (offline)"'; }); t.on('tileload', function () { mv.tileErr = 0; }); });
+    mv.feat = L.layerGroup().addTo(mv.map); mv.me = L.layerGroup().addTo(mv.map);
+  }
+  function hzStyle(k) { return k === 'bunker' ? { color: '#ffe066', weight: 2, fillColor: '#ffe066', fillOpacity: .35 } : { color: '#4dabf7', weight: 2, fillColor: '#4dabf7', fillOpacity: .35 }; }
+  function drawMap() {
+    var h = cur(), msg = '';
+    $('mapCard').classList.toggle('hide', !(h && h.line));
+    if (!h || !h.line) return;
+    var cen = G.centroid(h.green), key = st.course + ':' + h.n + ':' + mv.mode;
+    var onImg = null;
+    if (mv.mode === 'img') { onImg = drawStatic(h, cen); msg = onImg; }
+    else if (mv.map) {
+      if (mv.fitKey !== key) {
+        mv.feat.clearLayers();
+        L.polyline(h.line, { color: '#fff', weight: 3, dashArray: '6 6' }).addTo(mv.feat);
+        (h.hz || []).forEach(function (z) { L.polygon(z.g, hzStyle(z.k)).addTo(mv.feat); });
+        L.polygon(h.green, { color: '#39ff14', weight: 3, fillOpacity: .15 }).addTo(mv.feat);
+        mv.map.fitBounds(L.latLngBounds(h.line.concat(h.green)), { padding: [20, 20] });
+        mv.fitKey = key;
+      }
+      mv.me.clearLayers();
+      if (st.pos) {
+        L.circle(st.pos, { radius: st.acc || 5, color: '#1c7ed6', weight: 1, fillColor: '#1c7ed6', fillOpacity: .18, interactive: false }).addTo(mv.me);
+        if (st.res && st.res.green_centre >= 15) L.polyline([st.pos, cen], { color: '#fff', weight: 3 }).addTo(mv.me)
+          .bindTooltip(st.res.green_centre + ' m', { permanent: true, direction: 'center', className: 'dist-label' });
+        L.circleMarker(st.pos, { radius: 9, color: '#fff', weight: 3, fillColor: '#e03131', fillOpacity: 1 }).addTo(mv.me);
+        if (!mv.map.getBounds().pad(-0.05).contains(st.pos)) msg = 'Je positie valt buiten beeld (zoom uit)';
+      }
+    }
+    $('mapMsg').textContent = msg || (!st.pos ? 'Wachten op GPS…' : '');
+  }
+  function ns(tag, at) { var e = document.createElementNS('http://www.w3.org/2000/svg', tag); for (var k in at) e.setAttribute(k, at[k]); return e; }
+  var sv = { key: null, dyn: null };
+  function drawStatic(h, cen) {
+    var im = h.img, box = $('smap');
+    if (!im) { box.innerHTML = ''; sv.key = null; return 'Geen foto voor deze hole'; }
+    var P = function (p) { return G.imgPx(im, p); }, pts = function (g) { return g.map(function (p) { return P(p).map(function (v) { return v.toFixed(1); }).join(','); }).join(' '); };
+    var key = st.course + ':' + h.n;
+    if (sv.key !== key) {
+      box.innerHTML = '';
+      var svg = ns('svg', { viewBox: '0 0 ' + im.w + ' ' + im.h, preserveAspectRatio: 'xMidYMid meet' });
+      svg.appendChild(ns('image', { href: im.f, x: 0, y: 0, width: im.w, height: im.h }));
+      svg.appendChild(ns('polyline', { points: pts(h.line), fill: 'none', stroke: '#fff', 'stroke-width': 3, 'stroke-dasharray': '8 8' }));
+      (h.hz || []).forEach(function (z) { var b = z.k === 'bunker' ? '#ffe066' : '#4dabf7'; svg.appendChild(ns('polygon', { points: pts(z.g), fill: b, 'fill-opacity': .3, stroke: b, 'stroke-width': 2 })); });
+      svg.appendChild(ns('polygon', { points: pts(h.green), fill: '#39ff14', 'fill-opacity': .15, stroke: '#39ff14', 'stroke-width': 3 }));
+      sv.dyn = ns('g', {}); svg.appendChild(sv.dyn); box.appendChild(svg); sv.key = key;
+    }
+    var g = sv.dyn, out = ''; while (g.firstChild) g.removeChild(g.firstChild);
+    if (st.pos) {
+      var m = P(st.pos), c = P(cen), r = Math.max(4, (st.acc || 5) * im.sc);
+      var bw = box.clientWidth || 300, bh = box.clientHeight || 300, k = Math.max(1, Math.min(4, Math.max(im.w / bw, im.h / bh)));
+      if (m[0] < 0 || m[1] < 0 || m[0] > im.w || m[1] > im.h) out = 'Je positie valt buiten deze foto';
+      g.appendChild(ns('circle', { cx: m[0], cy: m[1], r: r, fill: '#1c7ed6', 'fill-opacity': .2, stroke: '#1c7ed6', 'stroke-width': 2 }));
+      if (st.res && st.res.green_centre >= 15) {
+        g.appendChild(ns('line', { x1: m[0], y1: m[1], x2: c[0], y2: c[1], stroke: '#fff', 'stroke-width': 2.5 * k }));
+        var lx = (m[0] + c[0]) / 2, ly = (m[1] + c[1]) / 2;
+        g.appendChild(ns('rect', { x: lx - 30 * k, y: ly - 13 * k, width: 60 * k, height: 25 * k, rx: 4 * k, fill: '#fff', stroke: '#000', 'stroke-width': 1.5 * k }));
+        var tx = ns('text', { x: lx, y: ly + 6 * k, 'text-anchor': 'middle', 'font-size': 17 * k, 'font-weight': 900, fill: '#000' }); tx.textContent = st.res.green_centre + ' m'; g.appendChild(tx);
+      }
+      g.appendChild(ns('circle', { cx: m[0], cy: m[1], r: 8 * k, fill: '#e03131', stroke: '#fff', 'stroke-width': 3 * k }));
+    }
+    return out;
+  }
+  $('tSat').onclick = function () { setMode('sat'); };
+  $('tOsm').onclick = function () { setMode('osm'); };
+  $('tImg').onclick = function () { setMode('img'); };
+  $('enlarge').onclick = function () { document.body.classList.toggle('full'); $('enlarge').textContent = document.body.classList.contains('full') ? '✕' : '⤢'; mv.fitKey = null; setTimeout(function () { if (mv.map) mv.map.invalidateSize(); drawMap(); }, 60); };
+  $('saveOffline').onclick = function () {
+    var d = st.data[st.course]; if (!d) return;
+    var fs = d.holes.filter(function (h) { return h.img; }).map(function (h) { return h.img.f; });
+    if (!('caches' in window)) { toast('Offline opslaan niet ondersteund'); return; }
+    caches.open('golf-gps-img').then(function (c) { return c.addAll(fs); }).then(function () { toast(fs.length + " holefoto's opgeslagen"); }, function () { toast('Opslaan mislukt'); });
+  };
+  window.addEventListener('offline', function () { if (mv.mode !== 'img') setMode('img'); });
+
   function startGPS() {
     if (!('geolocation' in navigator)) { st.err = 'Deze browser heeft geen GPS-toegang.'; render(); return; }
     navigator.geolocation.watchPosition(function (p) {
@@ -214,6 +342,7 @@
   }
 
   buildClubInputs();
+  setMode(navigator.onLine === false ? 'img' : mv.mode);
   loadCourse(localStorage.getItem('gps.course') || 'la-finca');
   startGPS();
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
