@@ -15,6 +15,11 @@
   function esc(t) { return String(t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
   function toast(t) { var e = $('toast'); e.textContent = t; e.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(function () { e.classList.remove('show'); }, 2200); }
 
+  var FAR_M = 1500;
+  function fmt(n) { return n >= 10000 ? Number(n).toLocaleString('nl-NL') : String(n); }
+  function km(m) { var k = m / 1000; return (k < 10 ? k.toLocaleString('nl-NL', { maximumFractionDigits: 1 }) : Math.round(k).toLocaleString('nl-NL')) + ' km'; }
+  function pill(club, carry, total) { return '<span class="cpill"><span class="cp">' + esc(club) + '</span><span class="cm"><b>' + carry + ' m</b>' + (total && total !== carry ? '<small>carry · ±' + total + ' m totaal</small>' : '<small>carry</small>') + '</span></span>'; }
+
   // ---------- clubs (Mijn afstanden) ----------
   function savedClubs() { try { var c = JSON.parse(ls('gps.clubs')); if (c && typeof c === 'object' && Object.keys(c).length) return c; } catch (e) {} return null; }
   function clubsObj() { return savedClubs() || TYPICAL; }
@@ -50,7 +55,7 @@
     buildClubInputs(pref && Object.keys(pref).length ? pref : null);
     var r = location.hash.match(/roll=(\d{1,2})/i); if (r) $('roll').value = r[1];
     var f = location.hash.match(/fav=(\d{2,3})/i); if (f) $('fav').value = f[1];
-    $('distStep').classList.toggle('hide', !step);
+    $('distSheet').querySelector('.sheethead').classList.toggle('hide', !step);
     $('distSheet').classList.remove('hide');
     setTimeout(function () { var i = $('clubInputs').querySelector('input'); if (i && !step) i.focus(); }, 50);
   }
@@ -95,38 +100,67 @@
   // ---------- render ----------
   function render() {
     var h = cur(), mapped = h && h.line;
-    $('holeNo').textContent = 'Hole ' + st.hole;
-    $('holePar').textContent = h ? ('Par ' + (h.par || '?') + ' · SI ' + (h.si || '?') + (h.geel ? ' · geel ' + h.geel + ' m' : '')) : '';
+    var d0 = course();
+    $('holeNo').innerHTML = '<span class="hl">Hole</span> <span class="hn">' + st.hole + '</span>';
+    $('holePar').innerHTML = h ? ('<span class="mc"><b>Par</b> ' + (h.par || '?') + '</span><span class="mc"><b>SI</b> ' + (h.si || '?') + '</span>' + (h.geel ? '<span class="mc"><i class="tee" aria-hidden="true"></i>' + h.geel + ' m</span>' : '')) : '&nbsp;';
+    $('hero').setAttribute('aria-label', (d0 ? d0.name + ', ' : '') + 'hole ' + st.hole);
     $('auto').className = 'chip' + (st.auto ? ' on' : ''); $('auto').setAttribute('aria-pressed', st.auto ? 'true' : 'false');
-    $('greenBox').classList.toggle('hide', !mapped); $('unmapped').classList.toggle('hide', !h || !!mapped);
+    var far = !!(st.pos && st.off != null && st.off > FAR_M);
+    $('greenBox').classList.toggle('hide', !mapped || far); $('unmapped').classList.toggle('hide', !h || !!mapped);
+    $('farBox').classList.toggle('hide', !far || !mapped);
+    if (far) $('farTxt').textContent = 'Afstand tot de baan: ' + km(st.off) + '. Afstanden verschijnen zodra je bij de hole bent; plan intussen in Holeplan.';
     var s = $('status');
     if (st.err) { s.textContent = st.err; s.className = 'status bad'; }
     else if (!st.pos) { s.textContent = 'Wachten op GPS…'; s.className = 'status'; }
     else {
-      var far = st.off != null && st.off > 400;
-      s.textContent = 'GPS ±' + Math.round(st.acc) + ' m' + (st.acc > 15 ? ' (onnauwkeurig)' : '') + (st.auto ? ' · hole automatisch' : ' · hole handmatig') + (far ? ' · je lijkt niet op deze baan' : '');
-      s.className = 'status' + ((st.acc > 15 || far) ? ' bad' : '');
+      var away = st.off != null && st.off > 400 && !far;
+      s.textContent = 'GPS ±' + Math.round(st.acc) + ' m' + (st.acc > 15 ? ' (onnauwkeurig)' : '') + (st.auto ? ' · hole automatisch' : ' · hole handmatig') + (away ? ' · je lijkt niet op deze baan' : '');
+      s.className = 'status' + ((st.acc > 15 || away) ? ' bad' : '');
     }
-    st.res = (mapped && st.pos) ? G.compute(h, st.pos) : null;
+    st.res = (mapped && st.pos && !far) ? G.compute(h, st.pos) : null;
     var r = st.res;
-    $('gF').textContent = r && !r.flag_only ? r.green_front : '–'; $('gC').textContent = r ? r.green_centre : '–'; $('gB').textContent = r && !r.flag_only ? r.green_back : '–';
+    $('gF').textContent = r && !r.flag_only ? fmt(r.green_front) : '–'; $('gC').textContent = r ? fmt(r.green_centre) : '–'; $('gB').textContent = r && !r.flag_only ? fmt(r.green_back) : '–';
+    $('greenBox').classList.toggle('flag', !!(r && r.flag_only));
     $('flagNote').classList.toggle('hide', !(r && r.flag_only));
-    hzList($('hazards'), r ? r.hazards : null, null, r ? 'Geen gekarteerde bunkers of water vooruit' : '–');
     var gp = r ? G.planFromPos(h, st.pos, clubList(), fav(), roll() / 100) : null, g0 = gp && gp.shots[0];
-    $('clubAdv').innerHTML = g0 ? ('<b>' + esc(g0.club) + '</b>' + g0.carry + ' m' + (gp.fromTee && g0.total && g0.total !== g0.carry ? ' carry · ±' + g0.total + ' m totaal' : '')
+    hzList($('hazards'), r ? r.hazards : null, g0 ? g0.carry : null, r ? 'Geen gekarteerde bunkers of water vooruit' : (far ? 'Niet op de baan' : 'Wachten op GPS'));
+    $('clubAdv').innerHTML = g0 ? (pill(g0.club, g0.carry, gp.fromTee ? g0.total : 0)
       + '<span class="note2">' + (g0.kind === 'green' ? 'Naar het midden (' + r.green_centre + ' m)' : 'Lay-up: nog ' + g0.left + ' m daarna · ' + gp.n + ' slagen tot de green') + (gp.risky ? ' · let op: geen veilige landingsplek' : '') + '</span>')
-      : (r ? '–' : 'Nog geen GPS-positie');
+      : '<div class="empty"><svg width="28" height="28" aria-hidden="true"><use href="#i-pin"/></svg><span>' + (far ? 'Je bent niet op de baan. Advies verschijnt zodra je bij de hole bent.' : (st.pos ? 'Geen advies voor deze hole.' : 'Nog geen GPS-positie. Tik op <b>Hier ligt mijn bal</b> om je plek op de kaart te kiezen.')) + '</span></div>';
+    chips(d0);
+    var ms = $('mapStats');
+    ms.innerHTML = r ? ('<div class="ms"><b>' + fmt(r.green_centre) + '<small> m</small></b><span>' + (r.flag_only ? 'tot de vlag' : 'tot midden green') + '</span></div>'
+      + (!r.flag_only ? '<div class="ms"><b>' + r.green_front + '<small>/</small>' + r.green_back + '</b><span>voor / achter</span></div>' : '')
+      + (g0 ? '<div class="ms club"><b>' + esc(g0.club) + '</b><span>' + g0.carry + ' m ' + (g0.kind === 'green' ? 'naar green' : 'lay-up') + '</span></div>' : '')) : '';
+    $('heroClub').classList.toggle('hide', !g0);
+    $('heroClub').innerHTML = g0 ? '<span class="lbl">Advies</span><span class="cp">' + esc(g0.club) + '</span><span>' + g0.carry + ' m' + (g0.kind === 'green' ? ' naar de green' : ' lay-up') + '</span>' : '';
     if (st.ball && (st.ball.course !== st.course || st.ball.hole !== st.hole)) st.ball = null;
     renderBall(); drawMap(); renderPlan(); renderScore();
   }
+  function chips(d) {
+    var box = $('holeChips'), n = d ? d.holes.length : 18;
+    if (box.children.length !== n) {
+      box.innerHTML = '';
+      for (var k = 1; k <= n; k++) (function (k) { var b = document.createElement('button'); b.textContent = k; b.setAttribute('aria-label', 'Hole ' + k);
+        b.onclick = function () { st.auto = false; st.hole = k; render(); }; box.appendChild(b); })(k);
+    }
+    [].forEach.call(box.children, function (b, k) {
+      var on = k + 1 === st.hole, h = d && d.holes[k]; b.className = (on ? 'on' : '') + (h && !h.line ? ' nomap' : ''); b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      if (on && box.dataset.cur !== String(k)) { box.dataset.cur = String(k); var x = b.offsetLeft - (box.clientWidth - b.offsetWidth) / 2; box.scrollTo ? box.scrollTo({ left: Math.max(0, x) }) : (box.scrollLeft = x); }
+    });
+  }
   function hzList(box, list, shot, empty) {
     box.innerHTML = '';
-    if (!list) { box.innerHTML = '<div class="hz">–</div>'; return; }
-    if (!list.length) { box.innerHTML = '<div class="hz">' + esc(empty) + '</div>'; return; }
-    list.slice(0, 6).forEach(function (z) {
-      var danger = shot && shot >= z.reach - 5 && shot <= z.carry + 5;
-      var e = document.createElement('div'); e.className = 'hz' + (/water/.test(z.kind) ? ' water' : '') + (danger ? ' danger' : '');
-      e.innerHTML = '<span class="k">' + esc(z.label) + (danger ? ' · let op' : '') + '</span><span>bereik ' + z.reach + ' · carry ' + z.carry + ' m</span>';
+    if (!list || !list.length) { box.innerHTML = '<div class="hz none">' + esc(list ? empty : (empty || '–')) + '</div>'; return; }
+    var L6 = list.slice(0, 6), max = Math.max.apply(null, L6.map(function (z) { return z.carry; }).concat([shot || 0])) * 1.08 || 1;
+    function pc(v) { return Math.max(0, Math.min(100, v / max * 100)).toFixed(1) + '%'; }
+    L6.forEach(function (z) {
+      var danger = shot && shot >= z.reach - 5 && shot <= z.carry + 5, wat = /water/.test(z.kind);
+      var e = document.createElement('div'); e.className = 'hz' + (wat ? ' water' : ' bunker') + (danger ? ' danger' : '');
+      e.innerHTML = '<span class="ic"><svg width="20" height="20" aria-hidden="true"><use href="#' + (wat ? 'i-water' : 'i-bunker') + '"/></svg></span>'
+        + '<span class="k">' + esc(z.label) + (danger ? '<em>let op</em>' : '') + '</span><span class="v"><b>' + z.reach + '</b> / <b>' + z.carry + '</b> m</span>'
+        + '<span class="bar" aria-hidden="true"><i style="left:' + pc(z.reach) + ';width:calc(' + pc(z.carry) + ' - ' + pc(z.reach) + ')"></i>' + (shot ? '<u style="left:' + pc(shot) + '"></u>' : '') + '</span>';
+      e.setAttribute('aria-label', z.label + ': bereik ' + z.reach + ' m, carry ' + z.carry + ' m' + (danger ? ', let op' : ''));
       box.appendChild(e);
     });
   }
@@ -159,12 +193,12 @@
     var off = Math.round(G.lineDist(b.pos, h.line));
     $('ballSrc').textContent = (b.src === 'gps' ? 'GPS' : 'gekozen op kaart') + ' · ' + new Date(b.at).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
     $('ballDist').innerHTML = r.flag_only ? '<div class="m" style="grid-column:1/-1"><span>Vlag (kaart)</span><b>' + r.green_centre + '</b></div>'
-      : '<div><span>Voor</span><b>' + r.green_front + '</b></div><div class="m"><span>Midden</span><b>' + r.green_centre + '</b></div><div><span>Achter</span><b>' + r.green_back + '</b></div>';
+      : '<div><span>Voor</span><b>' + fmt(r.green_front) + '</b></div><div class="m"><span>Midden</span><b>' + fmt(r.green_centre) + '</b></div><div><span>Achter</span><b>' + fmt(r.green_back) + '</b></div>';
     var s0 = p && p.shots[0], html = '';
     if (off > 80) html += '<p class="note warn">Je bal ligt ' + off + ' m van de holelijn. Klopt hole ' + st.hole + '?</p>';
     if (!s0) html += '–';
-    else if (s0.kind === 'green') { var d = s0.carry - r.green_centre; html += '<b>' + esc(s0.club) + '</b> ' + s0.carry + ' m carry <span class="note2">' + (d === 0 ? 'precies naar het midden' : (d > 0 ? d + ' m langer dan midden' : (-d) + ' m korter dan midden')) + '</span>'; }
-    else html += 'Green buiten bereik (' + r.green_centre + ' m). <b>' + esc(s0.club) + '</b> ' + s0.carry + ' m <span class="note2">Leg neer: nog ' + s0.left + ' m daarna' + (p.n > 1 ? ' (favoriet ' + fav() + ' m)' : '') + '</span>';
+    else if (s0.kind === 'green') { var d = s0.carry - r.green_centre; html += pill(s0.club, s0.carry, 0) + '<span class="note2">' + (d === 0 ? 'precies naar het midden' : (d > 0 ? d + ' m langer dan midden' : (-d) + ' m korter dan midden')) + '</span>'; }
+    else html += pill(s0.club, s0.carry, p.fromTee ? s0.total : 0) + '<span class="note2">Green buiten bereik (' + r.green_centre + ' m). Leg neer: nog ' + s0.left + ' m daarna' + (p.n > 1 ? ' (favoriet ' + fav() + ' m)' : '') + '</span>';
     if (p && p.risky) html += '<p class="note warn">Geen veilige landingsplek gevonden: dit plan landt bij een hindernis.</p>';
     $('ballShot').innerHTML = html;
     $('ballPlan').innerHTML = p && p.n > 1 ? p.shots.map(function (x, i) { return '<li>' + shotTxt(x, i === 0, p.fromTee) + '</li>'; }).join('') : '';
@@ -186,7 +220,7 @@
       $('planShots').innerHTML = p.shots.map(function (x, i) { return '<li>' + (i === 0 ? 'Afslag: ' : '') + shotTxt(x, i === 0, true) + '</li>'; }).join('')
         + (p.risky ? '<li class="t warn">Geen veilige landingsplek gevonden: kies zelf, dit plan landt bij een hindernis.</li>' : '');
       var hz = p.bands.map(function (b) { return { a: Math.round(b.a - p.s0), b: Math.round(b.b - p.s0), label: b.label, side: b.side, kind: b.kind }; }).filter(function (b) { return b.b > 0; });
-      $('planHz').innerHTML = hz.length ? '<h3>Langs de lijn vanaf geel</h3>' + hz.map(function (b) { return '<div class="hz' + (/water/.test(b.kind) ? ' water' : '') + '"><span class="k">' + esc(b.label) + ' ' + b.side + '</span><span>' + Math.max(0, b.a) + '–' + b.b + ' m</span></div>'; }).join('') : '<h3>Langs de lijn</h3><div class="hz">Geen bunkers of water gekarteerd</div>';
+      $('planHz').innerHTML = hz.length ? '<h3>Langs de lijn vanaf geel</h3>' + hz.map(function (b) { return '<div class="hz' + (/water/.test(b.kind) ? ' water' : ' bunker') + '"><span class="ic"><svg width="20" height="20" aria-hidden="true"><use href="#' + (/water/.test(b.kind) ? 'i-water' : 'i-bunker') + '"/></svg></span><span class="k">' + esc(b.label) + ' ' + b.side + '</span><span class="v"><b>' + Math.max(0, b.a) + '–' + b.b + '</b> m</span></div>'; }).join('') : '<h3>Langs de lijn</h3><div class="hz none">Geen bunkers of water gekarteerd</div>';
     } else {
       $('planSub').textContent = 'Deze hole staat niet op de kaart; alleen het baanboek hieronder.'; $('planShots').innerHTML = ''; $('planHz').innerHTML = '';
     }
@@ -208,13 +242,17 @@
   var TABS = ['kaart', 'plan', 'caddie', 'score'];
   function showTab(t) {
     st.tab = t; try { sessionStorage.setItem('gps.tab', t); } catch (e) {}
-    TABS.forEach(function (k) { var b = $('tab-' + k), on = k === t; b.setAttribute('aria-selected', on ? 'true' : 'false'); b.tabIndex = on ? 0 : -1; $('p-' + k).classList.toggle('hide', !on); });
+    TABS.forEach(function (k) { var b = $('tab-' + k), on = k === t; b.setAttribute('aria-selected', on ? 'true' : 'false'); b.tabIndex = on ? 0 : -1; $('p-' + k).classList.toggle('hide', !on); if (on) { $('p-' + k).classList.remove('enter'); void $('p-' + k).offsetWidth; $('p-' + k).classList.add('enter'); } });
     if (t === 'kaart' && mv.map) setTimeout(function () { mv.map.invalidateSize(); drawMap(); }, 30);
   }
   TABS.forEach(function (k) { $('tab-' + k).onclick = function () { showTab(k); }; });
 
   $('prev').onclick = function () { st.auto = false; st.hole = st.hole > 1 ? st.hole - 1 : 18; render(); };
   $('next').onclick = function () { st.auto = false; st.hole = st.hole < 18 ? st.hole + 1 : 1; render(); };
+  (function () { var x0 = null, y0 = 0, hb = $('hero');
+    hb.addEventListener('touchstart', function (e) { if (e.target.closest('select,button')) { x0 = null; return; } x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive: true });
+    hb.addEventListener('touchend', function (e) { if (x0 == null) return; var t = e.changedTouches[0], dx = t.clientX - x0, dy = t.clientY - y0; x0 = null;
+      if (Math.abs(dx) > 60 && Math.abs(dy) < 40) $(dx < 0 ? 'next' : 'prev').click(); }, { passive: true }); })();
   $('auto').onclick = function () { st.auto = true; detect(true); render(); };
   $('course').onchange = function () { st.auto = true; st.ball = null; loadCourse(this.value); };
 
@@ -280,6 +318,7 @@
         L.circleMarker(st.ball.pos, { radius: 9, color: '#000', weight: 3, fillColor: '#fff', fillOpacity: 1, interactive: false }).addTo(mv.me);
       }
     }
+    if (st.pos && st.off != null && st.off > FAR_M && !st.ball) msg = 'Je bent niet op de baan: tik "Hier ligt mijn bal" om een plek te kiezen';
     $('mapMsg').textContent = st.picking ? 'Tik op de kaart waar je bal ligt' : (msg || (!st.pos && !st.ball ? 'Wachten op GPS… (of tik "Hier ligt mijn bal")' : ''));
   }
   function ns(tag, at) { var e = document.createElementNS('http://www.w3.org/2000/svg', tag); for (var k in at) e.setAttribute(k, at[k]); return e; }
@@ -432,16 +471,19 @@
   function hist() { try { return JSON.parse(sessionStorage.getItem('gps.chat')) || []; } catch (e) { return []; } }
   function renderHist() {
     var h = hist().slice(0, -1).reverse();  // newest answer is shown above; older ones here
-    $('history').innerHTML = h.length ? '<h3>Eerder deze ronde</h3>' + h.map(function (x) { return '<div class="qa"><div class="q">' + esc('Hole ' + x.hole + ': ' + x.q) + '</div><div class="a">' + esc(x.a) + '</div></div>'; }).join('') : '';
+    $('history').innerHTML = h.length ? '<h3>Eerder deze ronde</h3>' + h.map(function (x) { return '<div class="qa"><div class="q"><span class="hb">' + x.hole + '</span>' + esc(x.q) + '</div><div class="a">' + esc(x.a) + '</div></div>'; }).join('') : '';
+    if (!hist().length && !$('reply').textContent) $('reply').innerHTML = '<div class="empty"><svg width="28" height="28" aria-hidden="true"><use href="#i-chat"/></svg><span>Nog geen vragen deze ronde. Stel een vraag of laat hem leeg voor advies over deze slag; je caddie krijgt je positie en clubafstanden mee.</span></div>';
   }
+  var SKEL = '<div class="skel" aria-hidden="true"><i></i><i></i><i></i></div>';
   function doAsk() {
     var q = $('askQ').value.trim() || 'geef me advies voor deze slag', hole = st.hole;
     showTab('caddie');
     ask(q, false, function (r) {
       var m = $('replyMeta');
-      if (r.stage === 'sending') { $('reply').textContent = ''; m.textContent = 'Versturen…'; m.className = 'meta'; return; }
+      if (r.stage === 'sending') { $('reply').innerHTML = SKEL; $('reply').className = 'reply busy'; m.textContent = 'Versturen…'; m.className = 'meta'; return; }
       if (r.stage === 'waiting') { m.textContent = 'Caddie denkt na…'; return; }
-      if (r.err) { m.textContent = r.err; m.className = 'meta bad'; if (r.nolink) $('linkCard').scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+      $('reply').className = 'reply';
+      if (r.err) { $('reply').innerHTML = ''; m.textContent = r.err; m.className = 'meta bad'; if (r.nolink) $('linkCard').scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
       m.textContent = 'Caddie · ' + new Date(r.at).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' }) + ' · ' + q; m.className = 'meta';
       $('reply').textContent = r.reply; $('askQ').value = '';
       var h = hist(); h.push({ q: q, a: r.reply, hole: hole, at: r.at }); h = h.slice(-12); try { sessionStorage.setItem('gps.chat', JSON.stringify(h)); } catch (e) {}
@@ -482,24 +524,40 @@
     c.players.forEach(function (p, k) {
       var tot = sum(p, 0, 18), r = document.createElement('div'); r.className = 'prow';
       r.innerHTML = '<div class="nm">' + esc(p.name) + '<small>' + (p.hcp != null ? 'hcp ' + p.hcp + ' · ' : '') + (tot.n ? vs(tot.d) + ' na ' + tot.n + (on ? ' · ' + tot.pts + ' pt' : '') : 'nog geen score') + '</small></div>'
-        + '<button class="sq" aria-label="Eén slag minder voor ' + esc(p.name) + '">−</button><div class="val">' + (p.s[i] || '–') + '</div><button class="sq" aria-label="Eén slag meer voor ' + esc(p.name) + '">+</button>';
-      var b = r.querySelectorAll('button');
+        + '<button class="x" aria-label="' + esc(p.name) + ' verwijderen">×</button><button class="sq" aria-label="Eén slag minder voor ' + esc(p.name) + '">−</button><div class="val">' + (p.s[i] || '–') + '</div><button class="sq" aria-label="Eén slag meer voor ' + esc(p.name) + '">+</button>';
+      var b = [].slice.call(r.querySelectorAll('button'));
+      b.shift().onclick = function () { var cc = card(), q = cc.players[k]; if (!confirm(q.name + ' verwijderen van de scorekaart?')) return; cc.players.splice(k, 1); saveCard(cc); renderScore(); };
       b[0].onclick = function () { var cc = card(), q = cc.players[k]; if (q.s[i] > 1) q.s[i]--; else q.s[i] = null; saveCard(cc); renderScore(); };
       b[1].onclick = function () { var cc = card(), q = cc.players[k]; q.s[i] = q.s[i] ? Math.min(15, q.s[i] + 1) : P[i]; saveCard(cc); renderScore(); };
       box.appendChild(r);
     });
-    // table
-    var T = $('scTable'), h = '<thead><tr><th>Hole</th><th>Par</th><th>SI</th>' + c.players.map(function (p, k) { return '<th>' + esc(p.name) + ' <button class="x" data-k="' + k + '" aria-label="' + esc(p.name) + ' verwijderen" style="border:0;background:none;font-weight:900;min-width:32px;min-height:32px">×</button></th>'; }).join('') + '</tr></thead><tbody>';
-    function cell(p, i) { var s = p.s[i]; if (!s) return '<td>·</td>'; var d = s - P[i]; return '<td><span class="' + (d < 0 ? 'under' : d > 0 ? 'over' : '') + '">' + s + '</span>' + (on ? ' <small>' + stb(p, i) + '</small>' : '') + '</td>'; }
-    function totRow(lbl, a, b) { var par = 0; for (var j = a; j < b; j++) par += P[j] || 0; return '<tr class="tot"><td>' + lbl + '</td><td>' + par + '</td><td></td>' + c.players.map(function (p) { var x = sum(p, a, b); return '<td>' + (x.n ? x.t + ' (' + vs(x.d) + ')' + (on ? ' ' + x.pts + 'pt' : '') : '–') + '</td>'; }).join('') + '</tr>'; }
-    for (var j = 0; j < P.length; j++) {
-      h += '<tr data-h="' + (j + 1) + '"' + (j === i ? ' class="cur"' : '') + '><td>' + (j + 1) + '</td><td>' + P[j] + '</td><td>' + S[j] + '</td>' + c.players.map(function (p) { return cell(p, j); }).join('') + '</tr>';
-      if (j === 8) h += totRow('Uit', 0, 9);
+    // scorecard: two 9-hole blocks like a printed card; birdie = circle, eagle = double circle, bogey = square, double+ = double square
+    var T = $('scTable'), out = '';
+    function mark(p, j) { var s = p.s[j]; if (!s) return '<td class="e">·</td>'; var d = s - P[j];
+      var cls = d <= -2 ? 'eagle' : d === -1 ? 'birdie' : d === 1 ? 'bogey' : d >= 2 ? 'dbl' : 'par';
+      return '<td><span class="sc ' + cls + '">' + s + '</span>' + (on ? '<small>' + stb(p, j) + '</small>' : '') + '</td>'; }
+    function block(a, b, lbl) {
+      var par = 0, j; for (j = a; j < b; j++) par += P[j] || 0;
+      var t = '<table class="sct"><thead><tr><th scope="col">Hole</th>';
+      for (j = a; j < b; j++) t += '<th scope="col" data-h="' + (j + 1) + '"' + (j === i ? ' class="cur"' : '') + '>' + (j + 1) + '</th>';
+      t += '<th scope="col" class="tt">' + lbl + '</th></tr></thead><tbody><tr class="par"><th scope="row">Par</th>';
+      for (j = a; j < b; j++) t += '<td' + (j === i ? ' class="cur"' : '') + '>' + P[j] + '</td>';
+      t += '<td class="tt">' + par + '</td></tr><tr class="si"><th scope="row">SI</th>';
+      for (j = a; j < b; j++) t += '<td' + (j === i ? ' class="cur"' : '') + '>' + S[j] + '</td>';
+      t += '<td class="tt"></td></tr>';
+      c.players.forEach(function (p) { var x = sum(p, a, b);
+        t += '<tr class="pl"><th scope="row">' + esc(p.name) + '</th>';
+        for (j = a; j < b; j++) t += mark(p, j).replace('<td', '<td' + (j === i ? ' class="cur"' : ''));
+        t += '<td class="tt">' + (x.n ? x.t + (on ? '<small>' + x.pts + '</small>' : '') : '–') + '</td></tr>'; });
+      return t + '</tbody></table>';
     }
-    if (P.length) h += totRow('In', 9, 18) + totRow('Totaal', 0, 18);
-    T.innerHTML = h + '</tbody>';
-    T.querySelectorAll('tr[data-h]').forEach(function (tr) { tr.onclick = function () { st.auto = false; st.hole = +tr.dataset.h; render(); }; });
-    T.querySelectorAll('button.x').forEach(function (bt) { bt.onclick = function (e) { e.stopPropagation(); var cc = card(), p = cc.players[+bt.dataset.k]; if (!confirm(p.name + ' verwijderen van de scorekaart?')) return; cc.players.splice(+bt.dataset.k, 1); saveCard(cc); renderScore(); }; });
+    if (P.length) {
+      out = block(0, 9, 'Uit') + (P.length > 9 ? block(9, 18, 'In') : '');
+      out += '<div class="sctot">' + (c.players.length ? c.players.map(function (p) { var x = sum(p, 0, 18); return '<div><span>' + esc(p.name) + '</span><b>' + (x.n ? x.t : '–') + '</b><small>' + (x.n ? vs(x.d) + (on ? ' · ' + x.pts + ' pt' : '') : 'nog geen score') + '</small></div>'; }).join('') : '<div class="none">Nog geen spelers: voeg ze hierboven toe.</div>') + '</div>'
+        + '<p class="legend"><span class="sc birdie">3</span> birdie <span class="sc eagle">2</span> eagle <span class="sc bogey">5</span> bogey <span class="sc dbl">6</span> dubbel+</p>';
+    }
+    T.innerHTML = out;
+    T.querySelectorAll('th[data-h]').forEach(function (th) { th.onclick = function () { st.auto = false; st.hole = +th.dataset.h; render(); }; });
     $('scNote').textContent = (NOTE[st.course] || '') + (on ? ' Stableford: vereenvoudigd met je handicap als slagen (niet de officiële course handicap van de tee).' : '');
   }
   $('pAdd').onclick = function () {
@@ -553,6 +611,11 @@
     caches.open('golf-gps-img').then(function (c) { return c.addAll(fs); }).then(function () { toast(fs.length + " holefoto's opgeslagen"); }, function () { toast('Opslaan mislukt'); });
   };
 
+  function theme(t) { t = t === 'dark' ? 'dark' : 'light'; document.documentElement.dataset.theme = t; ls('gps.theme', t === 'dark' ? 'dark' : null);
+    [].forEach.call($('theme').querySelectorAll('button'), function (b) { b.setAttribute('aria-pressed', b.dataset.t === t ? 'true' : 'false'); });
+    var m = document.querySelector('meta[name=theme-color]'); if (m) m.content = t === 'dark' ? '#0e1511' : '#f4f6f2'; }
+  [].forEach.call($('theme').querySelectorAll('button'), function (b) { b.onclick = function () { theme(b.dataset.t); }; });
+  theme(ls('gps.theme'));
   function startGPS() {
     if (!('geolocation' in navigator)) { st.err = 'Deze browser heeft geen GPS-toegang.'; render(); return; }
     navigator.geolocation.watchPosition(function (p) {

@@ -18,39 +18,53 @@
   <symbol id="i-dot" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="2.2"/></symbol>
   <symbol id="i-expand" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></symbol>
   <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></symbol>
+  <symbol id="i-flag" viewBox="0 0 24 24"><path d="M6 21V4M6 4h11l-2.5 4L17 12H6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-map" viewBox="0 0 24 24"><path d="M9 4L3 6.5v13.5L9 17.5l6 2.5 6-2.5V4l-6 2.5zM9 4v13.5M15 6.5V20" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="i-card" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3.5 9.5h17M9 9.5v10M14.5 9.5v10" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="i-left" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-water" viewBox="0 0 24 24"><path d="M3 9c2-1.5 4-1.5 6 0s4 1.5 6 0 4-1.5 6 0M3 15c2-1.5 4-1.5 6 0s4 1.5 6 0 4-1.5 6 0" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+  <symbol id="i-bunker" viewBox="0 0 24 24"><path d="M3 17c3-5 6-7 9-7s6 2 9 7z" fill="currentColor"/><circle cx="8" cy="7" r="1.3" fill="currentColor"/><circle cx="12" cy="5.5" r="1.3" fill="currentColor"/><circle cx="16" cy="7" r="1.3" fill="currentColor"/></symbol>
 </svg>
 
-<header class="top">
-  <h1 class="brand"><span class="mark" aria-hidden="true"></span>Golf GPS</h1>
-  <select id="course" aria-label="Baan">
-    <option value="la-finca">La Finca</option>
-    <option value="las-ramblas">Las Ramblas</option>
-    <option value="las-colinas">Las Colinas</option>
-  </select>
+<header class="hero" id="hero">
+  <div class="topbar">
+    <span class="brand"><span class="mark" aria-hidden="true"><svg width="18" height="18"><use href="#i-flag"/></svg></span><span class="bn">Golf GPS</span></span>
+    <label class="sel"><span class="sr">Baan</span>
+      <select id="course" aria-label="Baan">
+        <option value="la-finca">La Finca</option>
+        <option value="las-ramblas">Las Ramblas</option>
+        <option value="las-colinas">Las Colinas</option>
+      </select><svg class="chev" width="18" height="18" aria-hidden="true"><use href="#i-down"/></svg></label>
+  </div>
+  <div class="chips" id="holeChips" role="group" aria-label="Kies hole"></div>
+  <div class="holebar">
+    <button id="prev" class="arrow" aria-label="Vorige hole"><svg width="28" height="28"><use href="#i-left"/></svg></button>
+    <div class="holeinfo"><h1 class="h" id="holeNo">Hole –</h1><div class="meta" id="holePar">&nbsp;</div></div>
+    <button id="next" class="arrow" aria-label="Volgende hole"><svg width="28" height="28"><use href="#i-right"/></svg></button>
+  </div>
+  <div class="dist" id="greenBox">
+    <div class="g side"><span class="lbl">Voor</span><span class="num" id="gF">–</span></div>
+    <div class="g mid"><span class="lbl">Midden</span><span class="num" id="gC">–</span><span class="unit">meter</span></div>
+    <div class="g side"><span class="lbl">Achter</span><span class="num" id="gB">–</span></div>
+  </div>
+  <div class="far hide" id="farBox" role="status">
+    <svg width="28" height="28" aria-hidden="true"><use href="#i-pin"/></svg>
+    <div><b>Je bent niet op de baan</b><span id="farTxt"></span></div>
+  </div>
+  <div class="heroclub hide" id="heroClub"></div>
+  <p id="flagNote" class="note hide">Green niet op de kaart: midden = vlag uit de kaart, geen voor/achter.</p>
+  <p id="unmapped" class="note hide">Deze hole staat niet op de kaart, dus geen afstanden. Kies een andere hole met ‹ / ›.</p>
+  <div class="statusrow"><p class="status" id="status" role="status">GPS starten…</p>
+    <button id="auto" class="chip on" aria-pressed="true" aria-label="Hole automatisch kiezen">Auto-hole</button></div>
 </header>
 
-<section class="hole" aria-label="Hole en afstanden">
-  <div class="holebar">
-    <button id="prev" class="sq" aria-label="Vorige hole">−</button>
-    <div class="holeinfo"><div class="h" id="holeNo">Hole –</div><div class="p" id="holePar">&nbsp;</div></div>
-    <button id="next" class="sq" aria-label="Volgende hole">+</button>
-    <button id="auto" class="chip on" aria-pressed="true" aria-label="Hole automatisch kiezen">Auto</button>
-  </div>
-  <div class="green" id="greenBox">
-    <div class="g"><span class="lbl">Voor</span><span class="num" id="gF">–</span></div>
-    <div class="g mid"><span class="lbl">Midden</span><span class="num" id="gC">–</span></div>
-    <div class="g"><span class="lbl">Achter</span><span class="num" id="gB">–</span></div>
-  </div>
-  <p id="flagNote" class="note hide">Green niet op de kaart: midden = vlag uit de kaart, geen voor/achter.</p>
-  <p id="unmapped" class="note warn hide">Deze hole staat niet op de kaart, dus geen afstanden. Kies een andere hole met − / +.</p>
-  <p class="status" id="status" role="status">GPS starten…</p>
-</section>
-
 <nav class="tabs" role="tablist" aria-label="Onderdelen">
-  <button role="tab" id="tab-kaart" aria-controls="p-kaart" aria-selected="true">Kaart</button>
-  <button role="tab" id="tab-plan" aria-controls="p-plan" aria-selected="false">Holeplan</button>
-  <button role="tab" id="tab-caddie" aria-controls="p-caddie" aria-selected="false">Caddie</button>
-  <button role="tab" id="tab-score" aria-controls="p-score" aria-selected="false">Score</button>
+  <button role="tab" id="tab-kaart" aria-controls="p-kaart" aria-selected="true"><svg width="22" height="22" aria-hidden="true"><use href="#i-map"/></svg><span>Kaart</span></button>
+  <button role="tab" id="tab-plan" aria-controls="p-plan" aria-selected="false"><svg width="22" height="22" aria-hidden="true"><use href="#i-flag"/></svg><span>Holeplan</span></button>
+  <button role="tab" id="tab-caddie" aria-controls="p-caddie" aria-selected="false"><svg width="22" height="22" aria-hidden="true"><use href="#i-chat"/></svg><span>Caddie</span></button>
+  <button role="tab" id="tab-score" aria-controls="p-score" aria-selected="false"><svg width="22" height="22" aria-hidden="true"><use href="#i-card"/></svg><span>Score</span></button>
 </nav>
 
 <main>
@@ -73,6 +87,7 @@
     <div class="mapwrap">
       <div id="lmap"></div>
       <div id="smap" class="hide"></div>
+      <div class="mapstats" id="mapStats" aria-hidden="true"></div>
       <div class="mapmsg" id="mapMsg"></div>
       <button id="enlarge" aria-label="Kaart vergroten"><svg width="22" height="22"><use href="#i-expand"/></svg></button>
     </div>
@@ -152,7 +167,7 @@
   <div class="card">
     <h2>Scorekaart</h2>
     <label class="tog"><input type="checkbox" id="stbf"> Stableford tonen (handicap + stroke index)</label>
-    <div class="tablewrap"><table id="scTable"></table></div>
+    <div id="scTable" class="scard"></div>
     <p class="fine" id="scNote"></p>
     <div class="btnrow"><button class="btn ghost" id="scCopy">Kopieer scorekaart</button><button class="btn ghost danger" id="scReset">Nieuwe ronde</button></div>
   </div>
@@ -161,6 +176,10 @@
 <details class="card settings" id="setBox">
   <summary>Instellingen</summary>
   <div class="btnrow col"><button class="btn ghost" id="openDist">Mijn afstanden aanpassen</button></div>
+  <h3>Weergave</h3>
+  <div class="seg" id="theme" role="group" aria-label="Weergave">
+    <button data-t="light" aria-pressed="true">Licht (zon)</button><button data-t="dark" aria-pressed="false">Donker</button>
+  </div>
   <h3>Telefoon</h3>
   <div class="btnrow col">
     <button class="btn ghost" id="saveOffline">Holefoto's van deze baan offline opslaan</button>
@@ -177,16 +196,16 @@
 
 <div id="distSheet" class="sheet hide" role="dialog" aria-modal="true" aria-labelledby="distT">
   <div class="sheetin">
-    <p class="step" id="distStep">Stap 1 van 2</p>
-    <h2 id="distT">Mijn afstanden</h2>
-    <p class="sub">Hoe ver vliegt je bal met elke club (carry, in meters)? Laat een vak leeg als die club niet in je tas zit. Het grijze getal is een typische waarde.</p>
+    <div class="sheethead"><div class="dots" aria-hidden="true"><i class="on"></i><i></i></div><p class="step" id="distStep">Stap 1 van 2 · daarna je bot koppelen</p></div>
+    <h2 id="distT" class="headline"><em>Mijn</em> afstanden</h2>
+    <p class="sub">Hoe ver vliegt je bal met elke club? Vul de <b>carry</b> in meters in. Laat een vak leeg als die club niet in je tas zit; het grijze getal is een typische waarde.</p>
     <div class="clubs" id="clubInputs"></div>
-    <label class="lab" for="fav">Favoriete afstand voor je laatste slag naar de green (m)</label>
-    <input id="fav" type="number" inputmode="numeric" min="40" max="200" placeholder="100">
-    <label class="lab" for="roll">Uitrol na de landing bij een afslag (%)</label>
-    <input id="roll" type="number" inputmode="numeric" min="0" max="30" placeholder="5">
+    <div class="pair">
+      <div><label class="lab" for="fav">Favoriete laatste slag</label><div class="unitin"><input id="fav" type="number" inputmode="numeric" min="40" max="200" placeholder="100"><span>m</span></div></div>
+      <div><label class="lab" for="roll">Uitrol bij afslag</label><div class="unitin"><input id="roll" type="number" inputmode="numeric" min="0" max="30" placeholder="5"><span>%</span></div></div>
+    </div>
     <div class="btnrow col">
-      <button class="btn primary wide" id="distSave">Opslaan</button>
+      <button class="btn cta wide" id="distSave"><span class="cc"><svg width="22" height="22" aria-hidden="true"><use href="#i-check"/></svg></span><span class="ct">Opslaan en spelen</span><span class="arr" aria-hidden="true">›››</span></button>
       <button class="btn ghost" id="distTypical">Weet ik niet: typische tabel gebruiken</button>
     </div>
   </div>
