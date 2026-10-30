@@ -1,12 +1,14 @@
 name = "golf-caddie-relay"
 main = "src/index.js"
 compatibility_date = "2026-10-01"
+# Outbound fetches always go over the public internet (no same-zone shortcuts).
+compatibility_flags = ["global_fetch_strictly_public"]
 workers_dev = true
 
-# Create once with:  npx wrangler kv namespace create RELAY   and paste the id below.
+# KV namespace "RELAY" (created 30 Oct 2026).
 [[kv_namespaces]]
 binding = "RELAY"
-id = "REPLACE_WITH_KV_NAMESPACE_ID"
+id = "f72b032d3b724e2a80d82ff4541495ee"
 
 [vars]
 # Pages origins allowed to call the relay from a browser (comma separated).

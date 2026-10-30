@@ -248,7 +248,7 @@
   };
 
   // ---------- caddie link (page -> relay -> own bot webhook -> relay -> page) ----------
-  var DEFAULT_RELAY = '';  // set to the deployed Worker origin, e.g. https://golf-caddie-relay.<sub>.workers.dev
+  var DEFAULT_RELAY = 'https://golf-caddie-relay.moneyfarm.workers.dev';  // deployed Cloudflare Worker (worker/)
   function rnd(n) { var a = new Uint8Array(n); crypto.getRandomValues(a); return btoa(String.fromCharCode.apply(null, a)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
   function sess() {
     var s = null; try { s = JSON.parse(sessionStorage.getItem('gps.sess')); } catch (e) {}

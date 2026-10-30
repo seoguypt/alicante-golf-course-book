@@ -24,7 +24,7 @@ npm install
 npx wrangler kv namespace create RELAY      # paste id into wrangler.toml
 npx wrangler deploy                         # prints https://golf-caddie-relay.<sub>.workers.dev
 ```
-Then set `DEFAULT_RELAY` in `../gps/index.html` to that origin (or paste it in the page's "Relay URL" field).
+Deployed 30 Oct 2026: https://golf-caddie-relay.moneyfarm.workers.dev (`DEFAULT_RELAY` in `../gps/index.html`).
 Once the Grok Bot webhook host is known, set `ALLOWED_WEBHOOK_HOSTS` in wrangler.toml and redeploy.
 
 ## Local test
