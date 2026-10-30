@@ -23,3 +23,9 @@ Distances on the maps are measured along the OpenStreetMap hole line from the ma
 - Course features: © OpenStreetMap contributors, ODbL
 
 The derived map images in this repository are made available under the same terms (CC BY 4.0 for the imagery, ODbL for the OpenStreetMap-derived course features). Please keep the attribution above when reusing them.
+
+## GPS rangefinder (`gps/`)
+
+A mobile web page for use during a round: <https://seoguypt.github.io/alicante-golf-course-book/gps/>
+
+It uses the phone's GPS (in the browser, nothing is sent anywhere) to show distances to the front, middle and back of the green, mapped bunkers and water ahead (reach/carry), par, and a club suggestion based on your own carry distances (saved on the phone). The hole is detected automatically from the nearest OpenStreetMap hole line, with a manual −/+ override. Interface in Dutch. Distances come from the OpenStreetMap course map (© OpenStreetMap contributors, ODbL), not from today's flag position, and are accurate to a few metres plus the phone's GPS error. Las Ramblas hole 5 is not mapped, so no distances there.

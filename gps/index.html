@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b5d1e">
+<title>Golf GPS · Alicante</title>
+<link rel="icon" href="data:,">
+<link rel="manifest" href="manifest.webmanifest">
+<style>
+  :root { --g:#0b5d1e; --bg:#fff; --fg:#000; --mut:#333; --warn:#b00000; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; background:var(--bg); color:var(--fg); font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+  body { padding: env(safe-area-inset-top) 10px 20px; max-width: 560px; margin: 0 auto; }
+  header { display:flex; gap:8px; align-items:center; padding:10px 0 6px; }
+  select, button, input { font: inherit; }
+  select { flex:1; font-size:22px; font-weight:700; padding:10px; border:3px solid var(--fg); border-radius:10px; background:#fff; color:#000; }
+  .holebar { display:flex; align-items:center; gap:8px; margin:6px 0; }
+  .holebar button { width:64px; height:64px; font-size:36px; font-weight:800; border:3px solid var(--fg); border-radius:12px; background:#fff; color:#000; }
+  .holeinfo { flex:1; text-align:center; }
+  .holeinfo .h { font-size:40px; font-weight:900; line-height:1; }
+  .holeinfo .p { font-size:20px; font-weight:700; color:var(--mut); }
+  #auto { width:auto; padding:0 12px; font-size:18px; height:64px; }
+  #auto.on { background:var(--g); color:#fff; border-color:var(--g); }
+  .green { display:grid; grid-template-columns: 1fr 1.4fr 1fr; gap:6px; text-align:center; margin:8px 0; }
+  .green > div { border:3px solid var(--fg); border-radius:12px; padding:6px 2px; }
+  .green .lbl { font-size:18px; font-weight:800; text-transform:uppercase; letter-spacing:.5px; }
+  .green .num { font-size:54px; font-weight:900; line-height:1.05; font-variant-numeric: tabular-nums; }
+  .green .mid { background:var(--g); color:#fff; border-color:var(--g); }
+  .green .mid .num { font-size:84px; }
+  .card { border:3px solid var(--fg); border-radius:12px; padding:10px 12px; margin:8px 0; }
+  .club { font-size:22px; font-weight:700; }
+  .club b { font-size:44px; font-weight:900; }
+  .club .note { font-size:18px; font-weight:600; color:var(--mut); }
+  h2 { font-size:20px; margin:0 0 6px; text-transform:uppercase; }
+  .hz { font-size:22px; font-weight:700; padding:4px 0; border-top:1px solid #999; font-variant-numeric: tabular-nums; }
+  .hz:first-of-type { border-top:0; }
+  .hz span { font-weight:900; }
+  .status { font-size:18px; font-weight:700; }
+  .status.bad { color:var(--warn); }
+  .big { width:100%; min-height:60px; font-size:22px; font-weight:800; border:3px solid var(--fg); border-radius:12px; background:#fff; color:#000; margin:6px 0; }
+  .big.primary { background:var(--g); color:#fff; border-color:var(--g); }
+  details { border:3px solid var(--fg); border-radius:12px; padding:8px 12px; margin:8px 0; }
+  summary { font-size:22px; font-weight:800; cursor:pointer; }
+  .clubs { display:grid; grid-template-columns: repeat(3, 1fr); gap:8px; margin-top:10px; }
+  .clubs label { font-size:18px; font-weight:800; display:flex; flex-direction:column; }
+  .clubs input { font-size:24px; font-weight:700; padding:6px; border:2px solid var(--fg); border-radius:8px; width:100%; }
+  footer { font-size:14px; color:var(--mut); margin-top:14px; line-height:1.4; }
+  .hide { display:none; }
+  #toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:#000; color:#fff; padding:12px 18px; border-radius:10px; font-size:20px; font-weight:700; opacity:0; transition:opacity .2s; pointer-events:none; }
+  #toast.show { opacity:1; }
+</style>
+</head>
+<body>
+<header>
+  <select id="course" aria-label="Baan">
+    <option value="la-finca">La Finca</option>
+    <option value="las-ramblas">Las Ramblas</option>
+    <option value="las-colinas">Las Colinas</option>
+  </select>
+</header>
+
+<div class="holebar">
+  <button id="prev" aria-label="Vorige hole">−</button>
+  <div class="holeinfo"><div class="h" id="holeNo">Hole –</div><div class="p" id="holePar">&nbsp;</div></div>
+  <button id="next" aria-label="Volgende hole">+</button>
+  <button id="auto" class="on" aria-label="Hole automatisch kiezen">Auto</button>
+</div>
+
+<div class="status" id="status">GPS starten…</div>
+
+<div class="green" id="greenBox">
+  <div><div class="lbl">Voor</div><div class="num" id="gF">–</div></div>
+  <div class="mid"><div class="lbl">Midden</div><div class="num" id="gC">–</div></div>
+  <div><div class="lbl">Achter</div><div class="num" id="gB">–</div></div>
+</div>
+<div id="unmapped" class="card hide"><div class="club">Deze hole staat niet op de kaart, dus geen afstanden. Kies een andere hole met − / +.</div></div>
+
+<div class="card" id="clubCard">
+  <h2>Club</h2>
+  <div class="club" id="clubAdv">–</div>
+</div>
+
+<div class="card">
+  <h2>Hindernissen vooruit</h2>
+  <div id="hazards"><div class="hz">–</div></div>
+  <div class="note" style="font-size:15px;color:#333;margin-top:4px">bereik = tot de voorkant · carry = om eroverheen te komen (bunkers/water op of naast de holelijn)</div>
+</div>
+
+<button class="big primary" id="copy">Kopieer voor caddie</button>
+<button class="big" id="wake">Scherm aan houden: uit</button>
+
+<details id="clubsBox">
+  <summary>Mijn clubafstanden (carry, m)</summary>
+  <div class="clubs" id="clubInputs"></div>
+  <p style="font-size:16px">Laat een vak leeg als je die club niet in je tas hebt. Wordt bewaard op deze telefoon.</p>
+  <button class="big" id="resetClubs">Standaardtabel terugzetten</button>
+</details>
+
+<footer>
+  Afstanden komen uit de kaart (OpenStreetMap-holelijnen en greens), niet van de vlag van vandaag; nauwkeurigheid een paar meter plus de GPS-afwijking van je telefoon. Midden = midden van de green. Je locatie blijft op je telefoon; deze pagina stuurt niets door.<br>
+  Kaartgegevens © OpenStreetMap contributors, ODbL.
+</footer>
+<div id="toast"></div>
+
+<script src="gps.js"></script>
+<script>
+(function () {
+  var G = window.GolfGPS;
+  var CLUBS = ['D','3W','5W','4H','5H','4i','5i','6i','7i','8i','9i','PW','GW','SW','LW'];
+  var DEFAULT = { D:210, '3W':190, '5H':170, '6i':150, '7i':140, '8i':130, '9i':120, PW:105, SW:80 };
+  var $ = function (id) { return document.getElementById(id); };
+  var st = { course:null, data:{}, hole:1, auto:true, pos:null, acc:null, res:null, wake:null };
+
+  function loadClubs() { try { var c = JSON.parse(localStorage.getItem('gps.clubs')); if (c && typeof c === 'object') return c; } catch (e) {} return Object.assign({}, DEFAULT); }
+  var clubs = loadClubs();
+  function clubList() { return CLUBS.filter(function (k) { return clubs[k] > 0; }).map(function (k) { return { name:k, carry:+clubs[k] }; }); }
+  function buildClubInputs() {
+    var box = $('clubInputs'); box.innerHTML = '';
+    CLUBS.forEach(function (k) {
+      var l = document.createElement('label'); l.textContent = k;
+      var i = document.createElement('input'); i.type = 'number'; i.inputMode = 'numeric'; i.min = 0; i.max = 350; i.value = clubs[k] || '';
+      i.addEventListener('change', function () { var v = parseInt(i.value, 10); if (v > 0) clubs[k] = v; else delete clubs[k]; localStorage.setItem('gps.clubs', JSON.stringify(clubs)); render(); });
+      l.appendChild(i); box.appendChild(l);
+    });
+  }
+  $('resetClubs').onclick = function () { clubs = Object.assign({}, DEFAULT); localStorage.setItem('gps.clubs', JSON.stringify(clubs)); buildClubInputs(); render(); };
+
+  function toast(t) { var e = $('toast'); e.textContent = t; e.classList.add('show'); setTimeout(function () { e.classList.remove('show'); }, 1800); }
+
+  function loadCourse(id) {
+    st.course = id; localStorage.setItem('gps.course', id); $('course').value = id;
+    if (st.data[id]) { afterLoad(); return; }
+    fetch(id + '.json').then(function (r) { return r.json(); }).then(function (d) { st.data[id] = d; afterLoad(); })
+      .catch(function () { $('status').textContent = 'Baangegevens laden mislukt. Controleer je verbinding.'; $('status').className = 'status bad'; });
+  }
+  function afterLoad() { if (st.auto) detect(true); render(); }
+  function cur() { var d = st.data[st.course]; return d ? d.holes[st.hole - 1] : null; }
+
+  function detect(force) {
+    var d = st.data[st.course]; if (!d || !st.pos) return;
+    var r = G.detectHole(d, st.pos, force ? null : st.hole, 15);
+    if (r.n) { st.hole = r.n; st.off = r.off; }
+  }
+
+  function render() {
+    var d = st.data[st.course], h = cur();
+    $('holeNo').textContent = 'Hole ' + st.hole;
+    $('holePar').textContent = h ? ('Par ' + (h.par || '?') + ' · SI ' + (h.si || '?') + (h.geel ? ' · geel ' + h.geel + ' m' : '')) : '';
+    $('auto').className = st.auto ? 'on' : '';
+    var mapped = h && h.line;
+    $('greenBox').classList.toggle('hide', !mapped); $('unmapped').classList.toggle('hide', !!mapped);
+    // status
+    var s = $('status');
+    if (st.err) { s.textContent = st.err; s.className = 'status bad'; }
+    else if (!st.pos) { s.textContent = 'Wachten op GPS…'; s.className = 'status'; }
+    else {
+      var far = st.off != null && st.off > 400;
+      s.textContent = 'GPS ±' + Math.round(st.acc) + ' m' + (st.acc > 15 ? ' (onnauwkeurig)' : '') + (st.auto ? ' · hole automatisch' : ' · hole handmatig') + (far ? ' · je lijkt niet op deze baan' : '');
+      s.className = 'status' + ((st.acc > 15 || far) ? ' bad' : '');
+    }
+    st.res = (mapped && st.pos) ? G.compute(h, st.pos) : null;
+    var r = st.res;
+    $('gF').textContent = r ? r.green_front : '–'; $('gC').textContent = r ? r.green_centre : '–'; $('gB').textContent = r ? r.green_back : '–';
+    var hz = $('hazards'); hz.innerHTML = '';
+    if (!r) hz.innerHTML = '<div class="hz">–</div>';
+    else if (!r.hazards.length) hz.innerHTML = '<div class="hz">Geen gekarteerde bunkers of water vooruit</div>';
+    else r.hazards.slice(0, 6).forEach(function (z) {
+      var e = document.createElement('div'); e.className = 'hz';
+      e.innerHTML = z.label + ': bereik <span>' + z.reach + '</span> · carry <span>' + z.carry + '</span> m';
+      hz.appendChild(e);
+    });
+    var a = r ? G.adviseClub(clubList(), r) : null;
+    $('clubAdv').innerHTML = a ? ('<b>' + a.club + '</b> ' + (a.mode === 'layup' ? '(lay-up)' : '') + '<div class="note">' + a.note + '</div>')
+      : (r ? 'Vul je clubafstanden in (onderaan).' : '–');
+  }
+
+  $('prev').onclick = function () { st.auto = false; st.hole = st.hole > 1 ? st.hole - 1 : 18; render(); };
+  $('next').onclick = function () { st.auto = false; st.hole = st.hole < 18 ? st.hole + 1 : 1; render(); };
+  $('auto').onclick = function () { st.auto = true; detect(true); render(); };
+  $('course').onchange = function () { st.auto = true; loadCourse(this.value); };
+
+  $('copy').onclick = function () {
+    var d = st.data[st.course];
+    var txt = st.pos ? ('Locatie: ' + st.pos[0].toFixed(6) + ',' + st.pos[1].toFixed(6) + ' – ' + (d ? d.name : st.course) + ' hole ' + st.hole
+      + (st.res ? ', ' + st.res.green_centre + ' m tot midden (voor ' + st.res.green_front + ', achter ' + st.res.green_back + ')' : '') + ' – GPS ±' + Math.round(st.acc) + ' m')
+      : ((d ? d.name : st.course) + ' hole ' + st.hole + ' – nog geen GPS-positie');
+    function fallback() { var t = document.createElement('textarea'); t.value = txt; document.body.appendChild(t); t.select(); try { document.execCommand('copy'); toast('Gekopieerd'); } catch (e) { prompt('Kopieer deze tekst:', txt); } t.remove(); }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(function () { toast('Gekopieerd – plak in je caddie-chat'); }, fallback); else fallback();
+  };
+
+  $('wake').onclick = function () {
+    if (!('wakeLock' in navigator)) { toast('Niet ondersteund op deze telefoon'); return; }
+    if (st.wake) { st.wantWake = false; st.wake.release(); st.wake = null; $('wake').textContent = 'Scherm aan houden: uit'; return; }
+    st.wantWake = true; navigator.wakeLock.request('screen').then(function (w) { st.wake = w; $('wake').textContent = 'Scherm aan houden: aan';
+      w.addEventListener('release', function () { if (st.wake === w) { st.wake = null; $('wake').textContent = 'Scherm aan houden: uit'; } }); })
+      .catch(function () { toast('Scherm aan houden lukt niet'); });
+  };
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible' && st.wantWake && !st.wake && 'wakeLock' in navigator)
+      navigator.wakeLock.request('screen').then(function (w) { st.wake = w; $('wake').textContent = 'Scherm aan houden: aan'; }).catch(function () {});
+  });
+  function startGPS() {
+    if (!('geolocation' in navigator)) { st.err = 'Deze browser heeft geen GPS-toegang.'; render(); return; }
+    navigator.geolocation.watchPosition(function (p) {
+      st.err = null; st.pos = [p.coords.latitude, p.coords.longitude]; st.acc = p.coords.accuracy;
+      if (st.auto) detect(false); else { var d = st.data[st.course]; if (d) st.off = G.detectHole(d, st.pos, null).off; }
+      render();
+    }, function (e) {
+      st.err = e.code === 1 ? 'Locatie geweigerd. Sta locatie toe voor deze site in je browserinstellingen.' : 'Geen GPS-signaal (' + e.message + ')';
+      render();
+    }, { enableHighAccuracy: true, maximumAge: 2000, timeout: 20000 });
+  }
+
+  buildClubInputs();
+  loadCourse(localStorage.getItem('gps.course') || 'la-finca');
+  startGPS();
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
+})();
+</script>
+</body>
+</html>
