@@ -90,6 +90,7 @@
   <div class="mid"><div class="lbl">Midden</div><div class="num" id="gC">–</div></div>
   <div><div class="lbl">Achter</div><div class="num" id="gB">–</div></div>
 </div>
+<div id="flagNote" class="status hide">Green niet op de kaart: midden = vlag uit de kaart, geen voor/achter.</div>
 <div id="unmapped" class="card hide"><div class="club">Deze hole staat niet op de kaart, dus geen afstanden. Kies een andere hole met − / +.</div></div>
 
 <div class="mapcard" id="mapCard">
@@ -191,7 +192,8 @@
     }
     st.res = (mapped && st.pos) ? G.compute(h, st.pos) : null;
     var r = st.res;
-    $('gF').textContent = r ? r.green_front : '–'; $('gC').textContent = r ? r.green_centre : '–'; $('gB').textContent = r ? r.green_back : '–';
+    $('gF').textContent = r && !r.flag_only ? r.green_front : '–'; $('gC').textContent = r ? r.green_centre : '–'; $('gB').textContent = r && !r.flag_only ? r.green_back : '–';
+    $('flagNote').classList.toggle('hide', !(r && r.flag_only));
     var hz = $('hazards'); hz.innerHTML = '';
     if (!r) hz.innerHTML = '<div class="hz">–</div>';
     else if (!r.hazards.length) hz.innerHTML = '<div class="hz">Geen gekarteerde bunkers of water vooruit</div>';
@@ -214,7 +216,7 @@
   $('copy').onclick = function () {
     var d = st.data[st.course];
     var txt = st.pos ? ('Locatie: ' + st.pos[0].toFixed(6) + ',' + st.pos[1].toFixed(6) + ' – ' + (d ? d.name : st.course) + ' hole ' + st.hole
-      + (st.res ? ', ' + st.res.green_centre + ' m tot midden (voor ' + st.res.green_front + ', achter ' + st.res.green_back + ')' : '') + ' – GPS ±' + Math.round(st.acc) + ' m')
+      + (st.res ? (st.res.flag_only ? ', ' + st.res.green_centre + ' m tot de vlag (kaart)' : ', ' + st.res.green_centre + ' m tot midden (voor ' + st.res.green_front + ', achter ' + st.res.green_back + ')') : '') + ' – GPS ±' + Math.round(st.acc) + ' m')
       : ((d ? d.name : st.course) + ' hole ' + st.hole + ' – nog geen GPS-positie');
     function fallback() { var t = document.createElement('textarea'); t.value = txt; document.body.appendChild(t); t.select(); try { document.execCommand('copy'); toast('Gekopieerd'); } catch (e) { prompt('Kopieer deze tekst:', txt); } t.remove(); }
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(function () { toast('Gekopieerd – plak in je caddie-chat'); }, fallback); else fallback();
@@ -262,7 +264,7 @@
     var h = cur(), msg = '';
     $('mapCard').classList.toggle('hide', !(h && h.line));
     if (!h || !h.line) return;
-    var cen = G.centroid(h.green), key = st.course + ':' + h.n + ':' + mv.mode;
+    var cen = G.target(h), key = st.course + ':' + h.n + ':' + mv.mode;
     var onImg = null;
     if (mv.mode === 'img') { onImg = drawStatic(h, cen); msg = onImg; }
     else if (mv.map) {
@@ -270,8 +272,8 @@
         mv.feat.clearLayers();
         L.polyline(h.line, { color: '#fff', weight: 3, dashArray: '6 6' }).addTo(mv.feat);
         (h.hz || []).forEach(function (z) { L.polygon(z.g, hzStyle(z.k)).addTo(mv.feat); });
-        L.polygon(h.green, { color: '#39ff14', weight: 3, fillOpacity: .15 }).addTo(mv.feat);
-        mv.map.fitBounds(L.latLngBounds(h.line.concat(h.green)), { padding: [20, 20] });
+        if (h.green) L.polygon(h.green, { color: '#39ff14', weight: 3, fillOpacity: .15 }).addTo(mv.feat); else L.circleMarker(cen, { radius: 7, color: '#fff', weight: 2, fillColor: '#39ff14', fillOpacity: 1 }).addTo(mv.feat);
+        mv.map.fitBounds(L.latLngBounds(h.line.concat(h.green || [])), { padding: [20, 20] });
         mv.fitKey = key;
       }
       mv.me.clearLayers();
@@ -298,7 +300,8 @@
       svg.appendChild(ns('image', { href: im.f, x: 0, y: 0, width: im.w, height: im.h }));
       svg.appendChild(ns('polyline', { points: pts(h.line), fill: 'none', stroke: '#fff', 'stroke-width': 3, 'stroke-dasharray': '8 8' }));
       (h.hz || []).forEach(function (z) { var b = z.k === 'bunker' ? '#ffe066' : '#4dabf7'; svg.appendChild(ns('polygon', { points: pts(z.g), fill: b, 'fill-opacity': .3, stroke: b, 'stroke-width': 2 })); });
-      svg.appendChild(ns('polygon', { points: pts(h.green), fill: '#39ff14', 'fill-opacity': .15, stroke: '#39ff14', 'stroke-width': 3 }));
+      if (h.green) svg.appendChild(ns('polygon', { points: pts(h.green), fill: '#39ff14', 'fill-opacity': .15, stroke: '#39ff14', 'stroke-width': 3 }));
+      else { var fp = P(cen); svg.appendChild(ns('circle', { cx: fp[0], cy: fp[1], r: 7, fill: '#39ff14', stroke: '#fff', 'stroke-width': 2 })); }
       sv.dyn = ns('g', {}); svg.appendChild(sv.dyn); box.appendChild(svg); sv.key = key;
     }
     var g = sv.dyn, out = ''; while (g.firstChild) g.removeChild(g.firstChild);

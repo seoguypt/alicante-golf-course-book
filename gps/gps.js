@@ -42,9 +42,10 @@
   function compute(hole, me, opts) {
     opts = opts || {};
     if (!hole || !hole.line) return null;
-    var g = hole.green, cen = centroid(g), line = hole.line;
-    var out = { hole: hole.n, green_front: Math.round(minD(me, g)), green_centre: Math.round(dist(me, cen)),
-      green_back: Math.round(maxD(me, g)), to_flag_osm: Math.round(dist(me, line[line.length - 1])),
+    var line = hole.line, flag = line[line.length - 1], g = hole.green, cen = g ? centroid(g) : flag;
+    // no green mapped near the flag: centre = OSM flag (end of hole line), no front/back
+    var out = { hole: hole.n, flag_only: !g, green_front: g ? Math.round(minD(me, g)) : null, green_centre: Math.round(dist(me, cen)),
+      green_back: g ? Math.round(maxD(me, g)) : Math.round(dist(me, cen)), to_flag_osm: Math.round(dist(me, line[line.length - 1])),
       from_tee: Math.round(dist(me, line[0])), hazards: [] };
     var meToCen = dist(me, cen);
     (hole.hz || []).forEach(function (f) {
@@ -89,6 +90,7 @@
     var rx = x * c - y * s, ry = x * s + y * c;
     return [img.w / 2 + (img.ox || 0) + rx * img.sc, img.h / 2 + (img.oy || 0) - ry * img.sc];
   }
-  var api = { imgPx: imgPx, dist: dist, centroid: centroid, lineDist: lineDist, detectHole: detectHole, compute: compute, adviseClub: adviseClub };
+  function target(hole) { return hole.green ? centroid(hole.green) : hole.line[hole.line.length - 1]; }
+  var api = { target: target, imgPx: imgPx, dist: dist, centroid: centroid, lineDist: lineDist, detectHole: detectHole, compute: compute, adviseClub: adviseClub };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.GolfGPS = api;
 })(this);
