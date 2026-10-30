@@ -1,0 +1,16 @@
+name = "golf-caddie-relay"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+# Create once with:  npx wrangler kv namespace create RELAY   and paste the id below.
+[[kv_namespaces]]
+binding = "RELAY"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+
+[vars]
+# Pages origins allowed to call the relay from a browser (comma separated).
+ALLOWED_ORIGINS = "https://seoguypt.github.io"
+# Webhook hosts the relay may forward to (comma separated, "*.example.com" for subdomains).
+# Empty = any public https hostname (no IPs, no localhost). Set this to the Grok Bot webhook host once known.
+ALLOWED_WEBHOOK_HOSTS = ""

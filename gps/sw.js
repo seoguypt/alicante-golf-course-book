@@ -1,6 +1,6 @@
 // Offline cache: page, Leaflet and all three courses up front; hole photos cached as they are viewed
 // (or via the "offline opslaan" button). Map tiles from IGN/OSM are never cached here.
-var C = 'golf-gps-v3', IMG = 'golf-gps-img';
+var C = 'golf-gps-v4', IMG = 'golf-gps-img';
 var FILES = ['./', 'index.html', 'gps.js', 'la-finca.json', 'las-ramblas.json', 'las-colinas.json', 'manifest.webmanifest', 'leaflet/leaflet.js', 'leaflet/leaflet.css'];
 self.addEventListener('install', function (e) { e.waitUntil(caches.open(C).then(function (c) { return c.addAll(FILES); })); self.skipWaiting(); });
 self.addEventListener('activate', function (e) { e.waitUntil(caches.keys().then(function (ks) { return Promise.all(ks.filter(function (k) { return k !== C && k !== IMG; }).map(function (k) { return caches.delete(k); })); })); self.clients.claim(); });

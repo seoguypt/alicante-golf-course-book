@@ -64,6 +64,13 @@
   body.full .mapwrap { height:calc(100vh - 51px); }
   .dist-label { background:#fff; color:#000; font-weight:900; font-size:18px; border:2px solid #000; border-radius:6px; padding:1px 6px; white-space:nowrap; }
   .leaflet-container { font: inherit; }
+  #askQ { width:100%; font-size:20px; padding:10px; border:2px solid var(--fg); border-radius:8px; }
+  #reply { font-size:21px; font-weight:600; line-height:1.35; white-space:pre-wrap; margin-top:6px; }
+  #reply:empty { display:none; }
+  #replyMeta { font-size:15px; color:var(--mut); margin-top:4px; }
+  .set label { display:block; font-size:18px; font-weight:800; margin-top:10px; }
+  .set input { width:100%; font-size:17px; padding:8px; border:2px solid var(--fg); border-radius:8px; }
+  .set p { font-size:15px; margin:4px 0; }
 </style>
 <link rel="stylesheet" href="leaflet/leaflet.css">
 </head>
@@ -116,7 +123,15 @@
   <div class="note" style="font-size:15px;color:#333;margin-top:4px">bereik = tot de voorkant · carry = om eroverheen te komen (bunkers/water op of naast de holelijn)</div>
 </div>
 
-<button class="big primary" id="copy">Kopieer voor caddie</button>
+<div class="card" id="caddieCard">
+  <h2>Caddie</h2>
+  <input id="askQ" type="text" maxlength="300" placeholder="Vraag (optioneel), bv. lay-up of aanvallen?" autocomplete="off">
+  <button class="big primary" id="ask">Vraag caddie</button>
+  <div id="replyMeta"></div>
+  <div id="reply"></div>
+</div>
+
+<button class="big" id="copy">Kopieer voor caddie</button>
 <button class="big" id="saveOffline">Holefoto's van deze baan offline opslaan</button>
 <button class="big" id="wake">Scherm aan houden: uit</button>
 
@@ -127,8 +142,18 @@
   <button class="big" id="resetClubs">Standaardtabel terugzetten</button>
 </details>
 
+<details id="setBox" class="set">
+  <summary>Caddie-koppeling (eenmalig)</summary>
+  <p>Plak hier de gegevens van <b>je eigen</b> Grok Bot-routine "GPS-pagina locatie" (routinepaneel → Webhook). Ze blijven alleen op deze telefoon en gaan bij elke vraag via de relay naar jouw bot; de relay bewaart ze niet.</p>
+  <label for="sHook">Caddie webhook URL</label><input id="sHook" type="url" inputmode="url" autocomplete="off" placeholder="https://…">
+  <label for="sAuth">Authorization header</label><input id="sAuth" type="password" autocomplete="off" placeholder="Bearer …">
+  <label for="sRelay">Relay URL</label><input id="sRelay" type="url" inputmode="url" autocomplete="off">
+  <button class="big" id="sSave">Opslaan</button>
+  <button class="big" id="sClear">Koppeling wissen</button>
+</details>
+
 <footer>
-  Afstanden komen uit de kaart (OpenStreetMap-holelijnen en greens), niet van de vlag van vandaag; nauwkeurigheid een paar meter plus de GPS-afwijking van je telefoon. Midden = midden van de green. Je locatie blijft op je telefoon; deze pagina stuurt niets door.<br>
+  Afstanden komen uit de kaart (OpenStreetMap-holelijnen en greens), niet van de vlag van vandaag; nauwkeurigheid een paar meter plus de GPS-afwijking van je telefoon. Midden = midden van de green. Je locatie blijft op je telefoon, behalve als je op "Vraag caddie" drukt: dan gaan baan, hole, positie en je vraag via de relay naar je eigen bot.<br>
   Kaartgegevens © OpenStreetMap contributors, ODbL. Luchtfoto: PNOA cedido por © Instituto Geográfico Nacional (scne.es), CC BY 4.0. Kaart: Leaflet.
 </footer>
 <div id="toast"></div>
@@ -221,6 +246,59 @@
     function fallback() { var t = document.createElement('textarea'); t.value = txt; document.body.appendChild(t); t.select(); try { document.execCommand('copy'); toast('Gekopieerd'); } catch (e) { prompt('Kopieer deze tekst:', txt); } t.remove(); }
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(function () { toast('Gekopieerd – plak in je caddie-chat'); }, fallback); else fallback();
   };
+
+  // ---------- caddie link (page -> relay -> own bot webhook -> relay -> page) ----------
+  var DEFAULT_RELAY = '';  // set to the deployed Worker origin, e.g. https://golf-caddie-relay.<sub>.workers.dev
+  function rnd(n) { var a = new Uint8Array(n); crypto.getRandomValues(a); return btoa(String.fromCharCode.apply(null, a)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+  function sess() {
+    var s = null; try { s = JSON.parse(sessionStorage.getItem('gps.sess')); } catch (e) {}
+    if (!s || !s.id) { s = { id: rnd(18), tok: rnd(24) }; sessionStorage.setItem('gps.sess', JSON.stringify(s)); }
+    return s;
+  }
+  function cfg() { return { hook: localStorage.getItem('gps.hook') || '', auth: localStorage.getItem('gps.auth') || '', relay: (localStorage.getItem('gps.relay') || DEFAULT_RELAY).replace(/\/+$/, '') }; }
+  function fillSet() { var c = cfg(); $('sHook').value = c.hook; $('sAuth').value = c.auth; $('sRelay').value = c.relay; }
+  $('sSave').onclick = function () {
+    var h = $('sHook').value.trim(), a = $('sAuth').value.trim(), r = $('sRelay').value.trim();
+    if (h && !/^https:\/\//.test(h)) { toast('Webhook URL moet met https:// beginnen'); return; }
+    if (r && !/^https:\/\//.test(r)) { toast('Relay URL moet met https:// beginnen'); return; }
+    localStorage.setItem('gps.hook', h); localStorage.setItem('gps.auth', a); localStorage.setItem('gps.relay', r);
+    $('setBox').open = false; toast('Opgeslagen');
+  };
+  $('sClear').onclick = function () { ['gps.hook', 'gps.auth', 'gps.relay'].forEach(function (k) { localStorage.removeItem(k); }); fillSet(); toast('Koppeling gewist'); };
+  var poll = { t: null, n: 0 };
+  function meta(t, bad) { $('replyMeta').textContent = t; $('replyMeta').style.color = bad ? 'var(--warn)' : ''; }
+  function stopPoll() { if (poll.t) clearTimeout(poll.t); poll.t = null; $('ask').disabled = false; }
+  function pollReply(since) {
+    var c = cfg(), s = sess();
+    fetch(c.relay + '/reply/' + encodeURIComponent(s.id) + '?since=' + since, { headers: { 'X-Reply-Token': s.tok }, cache: 'no-store' })
+      .then(function (r) { return r.status === 200 ? r.json() : null; })
+      .then(function (j) {
+        if (j && j.reply) { stopPoll(); $('reply').textContent = j.reply; meta('Caddie · ' + new Date(j.at).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })); return; }
+        if (++poll.n >= 40) { stopPoll(); meta('Nog geen antwoord na 2 minuten. Kijk in je caddie-chat of probeer opnieuw.', true); return; }
+        poll.t = setTimeout(function () { pollReply(since); }, 3000);
+      }, function () { if (++poll.n >= 40) { stopPoll(); meta('Geen verbinding met de relay.', true); } else poll.t = setTimeout(function () { pollReply(since); }, 3000); });
+  }
+  $('ask').onclick = function () {
+    var c = cfg();
+    if (!c.hook || !c.auth || !c.relay) { $('setBox').open = true; $('setBox').scrollIntoView({ behavior: 'smooth' }); toast('Vul eerst de caddie-koppeling in'); return; }
+    if (!st.pos) { toast('Nog geen GPS-positie'); return; }
+    var s = sess(), since = Date.now() - 1000;
+    stopPoll(); $('ask').disabled = true; $('reply').textContent = ''; meta('Versturen…');
+    fetch(c.relay + '/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+      session: s.id, replyToken: s.tok, course: st.course, hole: st.hole, lat: st.pos[0], lon: st.pos[1], accuracy: st.acc,
+      question: $('askQ').value.trim(), webhookUrl: c.hook, authHeader: c.auth }) })
+      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { s: r.status, j: j }; }); })
+      .then(function (x) {
+        if (x.s === 202) { meta('Caddie denkt na…'); poll.n = 0; poll.t = setTimeout(function () { pollReply(since); }, 3000); return; }
+        stopPoll();
+        if (x.s === 409) { sessionStorage.removeItem('gps.sess'); meta('Sessie verlopen, druk nog een keer.', true); }
+        else if (x.s === 429) meta('Even wachten en opnieuw proberen.', true);
+        else if (x.s === 502 && (x.j.upstreamStatus === 401 || x.j.upstreamStatus === 403)) meta('Je bot weigert de sleutel. Controleer de Authorization header.', true);
+        else if (x.s === 502) meta('Je bot is niet bereikbaar (' + (x.j.upstreamStatus || 'geen antwoord') + '). Controleer de webhook URL.', true);
+        else meta('Versturen mislukt: ' + (x.j.error || x.s), true);
+      }, function () { stopPoll(); meta('Geen verbinding met de relay.', true); });
+  };
+  fillSet();
 
   $('wake').onclick = function () {
     if (!('wakeLock' in navigator)) { toast('Niet ondersteund op deze telefoon'); return; }
